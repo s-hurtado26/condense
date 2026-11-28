@@ -59,7 +59,7 @@ class CodingTimelineMixin:
         zoom = tk.Frame(bar, bg=T["bg_panel"])
         self.cdt_zoom_btns = {}
         for label, kind in (("Whole", "whole"), ("Episode", "episode"), ("10 min", "600"), ("2 min", "120")):
-            b = ttk.Button(zoom, text=label, style=rounded.style_for(zoom, "Seg"), command=lambda k=kind: self._cdt_zoom(k))
+            b = ttk.Button(zoom, text=label, style=rounded.style_for(zoom, "Seg"), command=lambda k=kind: self._cdt_zoom(k), takefocus=0)
             b.pack(side=tk.LEFT)
             self.cdt_zoom_btns[kind] = b
         bar.add(zoom)

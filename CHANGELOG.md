@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.30.2 — 2026-11-28
+
+- **↑ / ↓ through segments is smooth again:** the speaker chips are no longer built anew for every segment (they
+  blinked and, held down, lagged) — only their colours change; the row of buttons above them stays put.
+- **The video runs down to the timeline;** the segment editor sits under the transcript, as wide as it.
+- **The transcript keeps the keys:** clicking ⟲ / ⟳, ▶, *Step ▾*, the switches or ✓ no longer takes the keyboard
+  away from it (↑/↓ and Return stopped working); a choice in *Paragraphs* / *Show*, a typed
+  speed and the pop-up menus give it back; tooltips can't take it on the Mac.
+- **The note is there when you want it:** **N** (or *⋯ ▸ Note…*) opens the note line; segments with a note show it,
+  the others don't take the room.
+
 ## 0.30.1 — 2026-11-28
 
 ### Calmer still

@@ -269,7 +269,6 @@ class CodingMixin:
                 self._hide_find()
             self.tx_bar.pack_forget()
             self.cd_bar.pack(fill=tk.X, pady=5)
-            self.tx_edit_panel.pack_forget()
             self.tx_paned.forget(self.tx_text_frame)
             kw = {"before": video} if video is not None else {}
             book_w = int(self.settings.get("codebook_width", 260))
@@ -288,7 +287,6 @@ class CodingMixin:
             kw = {"before": video} if video is not None else {}
             self.tx_paned.add(self.tx_text_frame, minsize=300, stretch="always", **kw)
             self._tx_place_sashes(total, video_w, [])
-            self.tx_edit_panel.pack(side=tk.BOTTOM, fill=tk.X, pady=(8, 0), before=self.tx_paned)
         self.tx_mode = mode
         self.settings["tx_mode"] = mode
         self._mode_buttons()

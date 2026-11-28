@@ -374,6 +374,7 @@ class CondenseApp(QueueMixin, SettingsTabMixin, EditorMixin, NavigationMixin, Hi
     def _tool(self, parent, text: str, cmd, primary: bool = False, tip: Optional[str] = None):
         """A button. tip: what it does and its key, shown on hover — labels stay plain words (no "(M)", "⌘S")."""
         b = ttk.Button(parent, text=text, style=rounded.style_for(parent, "Primary" if primary else "Tool"), command=cmd)
+        self._no_focus(b)
         if tip:
             self._tip(b, tip)
         return b
@@ -382,6 +383,26 @@ class CondenseApp(QueueMixin, SettingsTabMixin, EditorMixin, NavigationMixin, Hi
         """The one heading style of the window (Tasks, Codebook, Codings, Timeline, Settings cards): small, bold,
         grey, in normal case — the content is what stands out, not its label."""
         return self._label(parent, text, font="section", fg=THEME["fg_secondary"], bg=bg, **kw)
+
+    def _no_focus(self, widget):
+        """Buttons and sliders in the main window don't take the keyboard focus when clicked: after ⟲ / ⟳, ▶, Step or
+        a switch, the arrows, Return and the other keys still go to the transcript. (Dialogs keep theirs for Tab.)"""
+        try:
+            if widget.winfo_toplevel() is self:
+                widget.configure(takefocus=0)
+        except Exception:  # noqa: BLE001
+            pass
+        return widget
+
+    def _back_to_transcript(self, _event=None):
+        """After a choice in a list (Paragraphs, Show) or a typed speed: the keys go to the transcript again."""
+        pt = self.__dict__.get("preview_text")
+        if pt is not None and self.tx_mode == "edit":
+            self.after_idle(pt.focus_set)
+        else:
+            cd = self.__dict__.get("cd_text")
+            if cd is not None:
+                self.after_idle(cd.focus_set)
 
     def _tip(self, widget, text):
         """A tooltip in the app's style; shortcuts written with Mac symbols read Ctrl+… on Linux and Windows."""

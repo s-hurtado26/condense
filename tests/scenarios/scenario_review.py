@@ -40,7 +40,13 @@ app._render_doc(TD.load(d1.path))
 pipe.messagebox.askyesno = lambda *a, **k: True
 
 print("[2] notes on segments: editor, view, exports, undo")
+app._goto_segment(0)
+chips_before = list(app.spk_chips._items)
 app._goto_segment(1)
+assert app.spk_chips._items == chips_before, "the speaker chips were built again for the next segment"  # (only recoloured)
+assert not app._note_shown  # no note: no note line
+app._open_note()
+assert app._note_shown
 app.var_seg_note.set("check spelling of the club's name with the school")
 assert app._editor_dirty()
 app._save_segment_edit()
@@ -50,8 +56,10 @@ assert "NOTE" in app.preview_text.used_tags and "✎ check spelling" in app.prev
 txt = (study / "Session 1" / "Session 1.txt").read_text()
 assert "near the park. [Note: check spelling of the club's name with the school]" in txt
 assert "[Note: check spelling" in (study / "Session 1" / "Session 1_paragraphs.rtf").read_text()
+app._goto_segment(0)
+assert not app._note_shown
 app._goto_segment(1)
-assert app.var_seg_note.get().startswith("check spelling")
+assert app.var_seg_note.get().startswith("check spelling") and app._note_shown  # a segment with a note shows it
 app.var_seg_note.set(""); app._save_segment_edit()
 assert "note" not in TD.load(d1.path).segments[1]
 app._undo()

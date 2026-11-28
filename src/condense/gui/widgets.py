@@ -184,7 +184,7 @@ class FlowFrame(tk.Frame):
     def _more_button(self):
         if self._more is None:
             from condense.gui import rounded
-            self._more = ttk.Button(self, text="⋯", style=rounded.style_for(self, "Tool"), command=self._open_more)
+            self._more = ttk.Button(self, text="⋯", style=rounded.style_for(self, "Tool"), command=self._open_more, takefocus=0)
             self._more.condense_keep = True
         return self._more
 
@@ -347,6 +347,11 @@ class Tooltip:
             win = tk.Toplevel(self.widget)
             win.condense_free = True  # (not tied to a window: Condense makes other new windows transient)
             win.wm_overrideredirect(True)
+            try:  # macOS: a help window, which never becomes the active window (it took the keys from the app)
+                if str(win.tk.call("tk", "windowingsystem")) == "aqua":
+                    win.tk.call("::tk::unsupported::MacWindowStyle", "style", win._w, "help", "noActivates")
+            except tk.TclError:
+                pass
             win.configure(bg=self.bg)
             tk.Label(win, text=text, bg=self.bg, fg=self.fg, font=self.font, justify=tk.LEFT, padx=8, pady=4,
                      wraplength=420).pack()

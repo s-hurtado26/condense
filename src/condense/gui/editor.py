@@ -60,14 +60,14 @@ class EditorMixin:
         self._persist["view_mode"] = self.var_view_mode
         self._combo_values["view_mode"] = ["Paragraphs", "Segments"]
         cb = ttk.Combobox(bar, textvariable=self.var_view_mode, values=["Paragraphs", "Segments"], state="readonly", width=10, font=self.f["small"])
-        cb.bind("<<ComboboxSelected>>", lambda e: self._rerender())
+        cb.bind("<<ComboboxSelected>>", lambda e: (self._rerender(), self._back_to_transcript()))
         bar.add(cb)
         bar.add(self._label(bar, "Show", font="small", fg=T["fg_secondary"], bg=T["bg_panel"]))
         self.var_show_filter = tk.StringVar(value="All segments")
         cmb_show = ttk.Combobox(bar, textvariable=self.var_show_filter, state="readonly", width=15, font=self.f["small"],
                                 values=self.SHOW_FILTERS)
         self.cmb_show = cmb_show
-        cmb_show.bind("<<ComboboxSelected>>", lambda e: (self._autosave_edit(rerender=False), self._rerender()))
+        cmb_show.bind("<<ComboboxSelected>>", lambda e: (self._autosave_edit(rerender=False), self._rerender(), self._back_to_transcript()))
         bar.add(cmb_show)
         bar.add(self._separator(bar))
         bar.add(self._tool(bar, "Find", self._toggle_find, tip="Find and replace  ⌘F"))
@@ -90,6 +90,7 @@ class EditorMixin:
         self.btn_back = self._tool(transport, f"⟲ {step} s", lambda: self._skip(-1), tip="Back one step  ⌘[   (three: ⇧⌘[)")
         self.btn_play = ttk.Button(transport, text="▶", style=rounded.style_for(transport, "Play"), command=self._toggle_play)
         self._tip(self.btn_play, "Play / pause  Space")
+        self._no_focus(self.btn_play)
         self.btn_fwd = self._tool(transport, f"{step} s ⟳", lambda: self._skip(+1), tip="Forward one step  ⌘]   (three: ⇧⌘])")
         for b in (self.btn_back, self.btn_play, self.btn_fwd):
             b.pack(side=tk.LEFT, padx=(0, 2))
@@ -105,12 +106,15 @@ class EditorMixin:
         self.speed_scale = ttk.Scale(speed, from_=self.SPEED_MIN, to=self.SPEED_SLIDER_MAX, orient=tk.HORIZONTAL, length=110,
                                      variable=self.var_speed_num, command=self._on_speed_slide)
         self.speed_scale.pack(side=tk.LEFT, padx=(2, 4))
+        self._no_focus(self.speed_scale)
         self.speed_scale.bind("<ButtonRelease-1>", lambda e: self._speed_apply_now())
         self.speed_entry = self._entry(speed, self.var_speed, width=6, font="small")
         self.speed_entry.configure(justify=tk.CENTER)
         self.speed_entry.pack(side=tk.LEFT)
         for seq in ("<Return>", "<KP_Enter>", "<FocusOut>"):
             self.speed_entry.bind(seq, lambda e: self._speed_typed())
+        for seq in ("<Return>", "<KP_Enter>", "<Escape>"):  # done typing: back to the transcript
+            self.speed_entry.bind(seq, self._back_to_transcript, add="+")
         self.var_speed.trace_add("write", lambda *a: self._speed_sync_slider())
         player.add(speed)
         self.lbl_time = self._label(player, "0:00:00 / 0:00:00", font="mono_small", fg=T["fg_secondary"])
@@ -138,6 +142,9 @@ class EditorMixin:
             ("Open in QuickTime ↗" if IS_MAC_PLATFORM else "Open in a video player ↗", self._open_in_quicktime),
             ("Keyboard shortcuts…", self._show_shortcuts),
         ]))
+        # the clicked word — “word”  time · p 92 % — at the end of the player's row, where there is room for it
+        self.lbl_word = self._label(player, "", font="small", fg=T["fg_dim"], anchor="w")
+        player.add(self.lbl_word)
 
         info = tk.Frame(tab, bg=T["bg_panel"])
         info.pack(fill=tk.X, pady=(6, 4))
@@ -164,23 +171,30 @@ class EditorMixin:
                                           fg=T["fg_secondary"], bg=T["bg_panel"], height=1, anchor="w", justify=tk.LEFT)
         self.lbl_ci_summary.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        # --- segment editor (bottom) ---
-        ep = tk.Frame(tab, bg=T["bg_card"], padx=10, pady=8)
-        ep.pack(side=tk.BOTTOM, fill=tk.X, pady=(8, 0))
-        self.tx_edit_panel = ep  # Edit mode only
+        self.tx_paned = tk.PanedWindow(tab, orient=tk.HORIZONTAL, sashwidth=6, sashrelief=tk.FLAT, bd=0, bg=T["bg_panel"], showhandle=False)
+        self.tx_paned.pack(fill=tk.BOTH, expand=True)
+        self._build_find_bar(tab, before=self.tx_paned)
+        frame = tk.Frame(self.tx_paned, bg=T["bg_panel"])
+        self.tx_paned.add(frame, minsize=300, stretch="always")
+        self.tx_text_frame = frame  # Edit mode; Code mode shows the codebook and the coding view here
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
+        # --- segment editor: under the transcript, as wide as it (the video beside them runs down to the timeline) ---
+        ep = tk.Frame(frame, bg=T["bg_card"], padx=10, pady=8)
+        ep.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        self.tx_edit_panel = ep  # Edit mode only (Code mode takes the whole column away)
         # one calm row: the segment on the left; ✓, the segmentation tools, ⋯ and Save & next on the right. The
         # speaker is chosen with the chips below (they show it too), Save and the rest are in ⋯ (⌘S still saves).
         head = tk.Frame(ep, bg=T["bg_card"])
         head.pack(fill=tk.X)
-        self.lbl_edit_title = self._label(head, "Click a word to edit its segment", font="section", anchor="w")
+        # as wide as its text; the buttons are right-aligned, so they stay where they are while ↑/↓ change it
+        self.lbl_edit_title = self._label(head, "Click a word to edit it", font="section", anchor="w")
         self.lbl_edit_title.pack(side=tk.LEFT)
-        # the clicked word — “word”  time · p 92 % — beside its segment (once a line of its own above the transcript)
-        self.lbl_word = self._label(head, "", font="small", fg=T["fg_dim"], anchor="w")
-        self.lbl_word.pack(side=tk.LEFT, padx=(12, 0))
         self.var_seg_speaker = tk.StringVar(value="")
         self.cmb_seg_speaker = ttk.Combobox(head, textvariable=self.var_seg_speaker, values=[], width=16, font=self.f["small"])  # (not shown)
         more = PopupMenu(self)
         more.add_command(label="Save", command=self._save_segment_edit, accelerator=kbd("⌘S"))
+        more.add_command(label="Note…", command=self._open_note, accelerator="N")
         more.add_command(label="Revert my changes", command=self._revert_segment_edit)
         more.add_separator()
         more.add_command(label="Re-transcribe this passage…", command=self._retranscribe_dialog)
@@ -195,6 +209,7 @@ class EditorMixin:
         self.edit_row = row
         self.btn_checked = ttk.Button(row, text="✓", style=rounded.style_for(row, "Check"), command=self._toggle_checked)
         self.btn_checked.condense_keep = True
+        self._no_focus(self.btn_checked)
         self._tip(self.btn_checked, lambda: ("Checked — click to unmark" if rounded.base_style(str(self.btn_checked.cget("style"))) == "CheckOn.TButton"
                                              else "Mark checked") + "  C")
         row.add(self.btn_checked)
@@ -217,8 +232,11 @@ class EditorMixin:
             self.edit_text.bind(seq, lambda e: (self._check_and_next(), "break")[-1])
         for d in range(1, 10):
             self.bind_all(f"<{EDIT_MOD}-Key-{d}>", lambda e, d=d: (self._assign_speaker_number(d), "break")[-1])
-        note_row = tk.Frame(ep, bg=T["bg_card"])
-        note_row.pack(fill=tk.X, pady=(0, 2))
+        # the note: only there when the segment has one, or when asked for (N, or ⋯ ▸ Note…)
+        extras = tk.Frame(ep, bg=T["bg_card"])
+        extras.pack(fill=tk.X)
+        note_row = tk.Frame(extras, bg=T["bg_card"])
+        self.note_row = note_row
         self._label(note_row, "✎ Note", font="small", fg="#c4b5fd").pack(side=tk.LEFT, padx=(0, 6))
         self.var_seg_note = tk.StringVar(value="")
         self.ent_seg_note = self._entry(note_row, self.var_seg_note, font="small")
@@ -229,20 +247,11 @@ class EditorMixin:
         self.edit_note_original = ""
         # only what is worth knowing about this segment (re-transcribed, Whisper wrote something else); the usual
         # hint about timing is a tooltip on the text box
-        self.lbl_edit_hint = self._label(ep, "", font="small", fg=T["fg_dim"], height=1, anchor="w", justify=tk.LEFT)
+        self.lbl_edit_hint = self._label(extras, "", font="small", fg=T["fg_dim"], height=1, anchor="w", justify=tk.LEFT)
         self._tip(self.edit_text, self.EDIT_HINT)
-        self.lbl_edit_hint.pack(fill=tk.X)
         self.edit_seg_idx: Optional[int] = None
         self.edit_original = ("", "")
 
-        self.tx_paned = tk.PanedWindow(tab, orient=tk.HORIZONTAL, sashwidth=6, sashrelief=tk.FLAT, bd=0, bg=T["bg_panel"], showhandle=False)
-        self.tx_paned.pack(fill=tk.BOTH, expand=True)
-        self._build_find_bar(tab, before=self.tx_paned)
-        frame = tk.Frame(self.tx_paned, bg=T["bg_panel"])
-        self.tx_paned.add(frame, minsize=300, stretch="always")
-        self.tx_text_frame = frame  # Edit mode; Code mode shows the codebook and the coding view here
-        frame.rowconfigure(0, weight=1)
-        frame.columnconfigure(0, weight=1)
         self._build_video_panel()
         # checked segments: a thin green bar in the margin beside their lines (instead of a ✓ in the text)
         self.check_bar = tk.Canvas(frame, width=self.CHECK_BAR_W, bg="#0b0d13", highlightthickness=0, bd=0)
@@ -332,8 +341,10 @@ class EditorMixin:
         self.edit_text.bind("<Tab>", brk(self._focus_transcript))  # a tab character is never wanted in a transcript
         # Esc while typing: save and go back to the transcript (↑/↓ move on, Return edits again). Outside the text
         # boxes Esc still plays and pauses; "break" keeps it from doing both.
-        for w in (self.edit_text, self.ent_seg_note):
-            w.bind("<Escape>", lambda e: (self._focus_transcript(), "break")[-1])
+        self.edit_text.bind("<Escape>", lambda e: (self._focus_transcript(), "break")[-1])
+        self.ent_seg_note.bind("<Escape>", lambda e: (self._close_note(), "break")[-1])
+        for k in ("n", "N"):
+            pt.bind(f"<Key-{k}>", brk(self._open_note))
         self.cmb_seg_speaker.bind("<<ComboboxSelected>>", lambda e: self._on_speaker_combo())
         self.sel_segs: List[int] = []
         self.sel_anchor: Optional[int] = None
@@ -389,6 +400,35 @@ class EditorMixin:
         return min(cands, key=lambda j: abs(self.span_starts[j] - t)) if cands else None
 
     CHECK_BAR_W = 8
+
+    def _show_note_row(self, show: bool):
+        row = self.__dict__.get("note_row")
+        if row is None:
+            return
+        self._note_shown = show
+        if show:
+            if self.lbl_edit_hint.winfo_manager():  # above a hint that is showing
+                row.pack(fill=tk.X, pady=(0, 2), before=self.lbl_edit_hint)
+            else:
+                row.pack(fill=tk.X, pady=(0, 2))
+        else:
+            row.pack_forget()
+
+    def _open_note(self):
+        """N (or ⋯ ▸ Note…): the note line for the open segment, ready to type in."""
+        if self.edit_seg_idx is None:
+            self._move_segment(+1)
+        if self.edit_seg_idx is None:
+            return
+        self._show_note_row(True)
+        self.ent_seg_note.focus_set()
+        self.ent_seg_note.icursor(tk.END)
+
+    def _close_note(self):
+        """Esc in the note: save it and back to the transcript; an empty note line goes away again."""
+        self._focus_transcript()
+        if not self.var_seg_note.get().strip():
+            self._show_note_row(False)
 
     def _schedule_check_bar(self):
         """Redraw the margin bars once, after the scrolling or drawing in progress (not on every scroll event)."""
@@ -784,7 +824,8 @@ class EditorMixin:
         self.var_seg_speaker.set("")
         self.edit_note_original = ""
         self.var_seg_note.set("")
-        self.lbl_edit_title.config(text="Click a word to edit its segment")
+        self._show_note_row(False)
+        self.lbl_edit_title.config(text="Click a word to edit it")
         self.preview_text.tag_remove("EDITSEG", "1.0", tk.END)
 
     def _editor_dirty(self) -> bool:
@@ -812,22 +853,25 @@ class EditorMixin:
         self.var_seg_speaker.set(speaker)
         self.edit_note_original = seg.get("note") or ""
         self.var_seg_note.set(self.edit_note_original)
+        self._show_note_row(bool(self.edit_note_original))
         self._refresh_speaker_chips()
-        mark = "  ✎" if seg.get("edited") else ""  # (checked: the ✓ button beside it is green)
+        mark = " ✎" if seg.get("edited") else ""  # (checked: the ✓ button beside it is green)
         self.btn_checked.configure(style=rounded.style_for(self.btn_checked.master, "CheckOn" if seg.get("checked") else "Check"))
-        self.lbl_edit_title.config(text=f"Segment {seg_idx + 1}/{len(doc.segments)}  ·  {short_ts(seg.get('start', 0))} – {short_ts(seg.get('end', 0))}{mark}")
-        self.after_idle(self.edit_row.relayout)  # the title's width changed
+        self.lbl_edit_title.config(text=f"{seg_idx + 1}/{len(doc.segments)} · {short_ts(seg.get('start', 0))} – {short_ts(seg.get('end', 0))}{mark}")
         orig = seg.get("text_whisper")
         rt = seg.get("retranscribed") or {}
         if rt and not seg.get("edited"):
             what = "translated to English" if rt.get("task") == "translate" else "re-transcribed"
             self.lbl_edit_hint.config(text=kbd(f"This segment was {what} with Whisper {rt.get('model')} (language: {rt.get('language')}). "
                                                "Undo (⌘Z) brings back the previous version."), fg="#8fb3ff")
+            self.lbl_edit_hint.pack(fill=tk.X)
         elif orig and " ".join(str(orig).split()) != " ".join(text.split()) and not seg.get("edited"):
             self.lbl_edit_hint.config(text=f"Whisper's own text for this segment differed: “{str(orig).strip()[:110]}” — listen and correct if needed.",
                                       fg=THEME["warn"])
+            self.lbl_edit_hint.pack(fill=tk.X)
         else:
             self.lbl_edit_hint.config(text="", fg=THEME["fg_dim"])  # the usual hint is on the text box, on hover
+            self.lbl_edit_hint.pack_forget()
         self._highlight_edit_segment()
 
     def _highlight_edit_segment(self):

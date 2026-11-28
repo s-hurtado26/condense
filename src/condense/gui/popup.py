@@ -155,6 +155,10 @@ class PopupMenu:
         win.deiconify()
         win.lift()
         if self.parent is None:
+            try:  # where the keys went before: they go back there when the menu closes
+                self._prev_focus = self.master.focus_get()
+            except Exception:
+                self._prev_focus = None
             self._grab()
             import time
             self._opened_at = time.monotonic()
@@ -197,6 +201,14 @@ class PopupMenu:
                 win.destroy()
             except Exception:
                 pass
+            prev = self.__dict__.get("_prev_focus")
+            self._prev_focus = None
+            if self.parent is None and prev is not None:
+                try:  # without this the keys went nowhere after a menu (on Linux): no ↑/↓ or Return in the transcript
+                    if prev.winfo_exists():
+                        prev.focus_force()
+                except Exception:
+                    pass
         if all_levels and self.parent is not None:
             self.parent.unpost(all_levels=True)
 

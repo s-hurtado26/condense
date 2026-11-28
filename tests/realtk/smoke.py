@@ -230,6 +230,36 @@ def main():
     ok(f"14 × ↓: layout unchanged; scrolled only when needed; speaker change and merge keep the segment in place "
        f"(y {y_before} → {y_after} → {y_merged})")
 
+    print("[1b2] the keys stay with the transcript after clicking the player and toolbars")
+    def click(w):
+        w.event_generate("<Enter>")
+        w.event_generate("<ButtonPress-1>", x=4, y=4)
+        w.event_generate("<ButtonRelease-1>", x=4, y=4)
+        pump(app, 0.2)
+    app.var_autoplay.set(False)
+    for _ in range(40):
+        pt.focus_force()
+        pump(app, 0.05)
+        if app.focus_get() is pt:
+            break
+    seg0 = app.edit_seg_idx
+    for w in (app.btn_fwd, app.btn_back, app.btn_step, app.btn_mode_edit, app.btn_checked, app.btn_checked):  # (✓ twice: as it was)
+        click(w)
+        m = getattr(w, "menu", None)
+        if m is not None and m.is_open:
+            m.unpost()
+            pump(app, 0.2)
+        assert app.focus_get() is pt, f"clicking {w.cget('text')!r} took the keys from the transcript: {app.focus_get()}"
+    app._player_pause()
+    pt.event_generate("<Down>")
+    pump(app, 0.3)
+    assert app.edit_seg_idx != seg0, "↓ after the clicks did not move on"
+    app.cmb_show.event_generate("<<ComboboxSelected>>")
+    pump(app, 0.3)
+    assert app.focus_get() is pt, f"a choice in Show kept the keys: {app.focus_get()}"
+    app.var_autoplay.set(True)
+    ok("after ⟲ / ⟳, Step ▾, the Code | Edit switch, ✓ and a Show choice the arrows still go to the transcript")
+
     print("[1c] Esc while editing")
 
     # Esc while typing in the segment box: back to the transcript, no play/pause; then ↓ moves on, Return edits again

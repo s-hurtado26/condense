@@ -144,42 +144,65 @@ class ReviewMarksMixin:
 
     # ----- speaker chips in the segment editor -----
     def _refresh_speaker_chips(self):
+        """The speaker chips under the segment. Built again only when the speakers (or the kind of selection) change;
+        moving to another segment only recolours them — rebuilding on every ↑/↓ made the row blink and lag."""
         chips = self.__dict__.get("spk_chips")
         if chips is None:
             return
-        chips.clear()
         doc = self.active_doc
         if doc is None:
+            chips.clear()
+            self._chip_sig = None
             return
         T = THEME
         segs = [s for s in (self.__dict__.get("sel_segs") or []) if s < len(doc.segments)]
         if len(segs) > 1:
             names = {doc.segments[s].get("speaker") or "" for s in segs}
             current = names.pop() if len(names) == 1 else ""
-            chips.add(self._label(chips, f"Assign to {len(segs)} selected segments ({segs[0] + 1}–{segs[-1] + 1}):", font="small_bold",
-                                  fg="#c4b5fd"))
+            lead = f"Assign to {len(segs)} selected segments ({segs[0] + 1}–{segs[-1] + 1}):"
         else:
             current = self.var_seg_speaker.get().strip()
-            chips.add(self._label(chips, "Speaker", font="small", fg=T["fg_dim"]))
-        for i, name in enumerate(self._roster()):
-            color = SPEAKER_COLORS[i % len(SPEAKER_COLORS)]
-            active = name == current
+            lead = "Speaker"
+        roster = list(self._roster())
+        sig = (lead, tuple(roster), bool(self._generic_speakers()))
+        if sig == self.__dict__.get("_chip_sig") and self.__dict__.get("_chip_by_name"):
+            self._paint_speaker_chips(current)
+            return
+        self._chip_sig = sig
+        chips.clear()
+        if len(segs) > 1:
+            chips.add(self._label(chips, lead, font="small_bold", fg="#c4b5fd"))
+        else:
+            chips.add(self._label(chips, lead, font="small", fg=T["fg_dim"]))
+        self._chip_by_name = {}
+        for i, name in enumerate(roster):
             # no outlines: the name in its colour; the segment's speaker filled
             chip = tk.Label(chips, text=(f"{i + 1}  " if i < 9 else "") + name, font=self.f["small_bold"], padx=8, pady=2, cursor="hand2",
-                            bg=color if active else T["bg_card"], fg=T["bg_root"] if active else color, highlightthickness=0)
+                            bg=T["bg_card"], fg=SPEAKER_COLORS[i % len(SPEAKER_COLORS)], highlightthickness=0)
+            chip.condense_color = SPEAKER_COLORS[i % len(SPEAKER_COLORS)]
             chip.bind("<Button-1>", lambda e, n=name: self._assign_speaker(n))
             for seq in ("<Button-3>",) + (("<Button-2>", "<Control-Button-1>") if IS_MAC else ()):
                 chip.bind(seq, lambda e, n=name: self._speaker_chip_menu(e, n))
             chips.add(chip)
+            self._chip_by_name[name] = chip
         add = tk.Label(chips, text="0  + Speaker", font=self.f["small"], padx=8, pady=2, cursor="hand2", bg=T["bg_card"], fg=T["fg_dim"],
                        highlightthickness=0)
         add.bind("<Button-1>", lambda e: self._add_speaker_quick())
         chips.add(add)
-        if self._generic_speakers():  # labels from speaker detection still waiting for a name
+        if sig[2]:  # labels from speaker detection still waiting for a name
             who = tk.Label(chips, text="Who is who?…", font=self.f["small_bold"], padx=8, pady=2, cursor="hand2", bg=T["bg_card"],
                            fg="#fbbf24", highlightthickness=0)
             who.bind("<Button-1>", lambda e: self._match_speakers_dialog())
             chips.add(who)
+        self._paint_speaker_chips(current)
+
+    def _paint_speaker_chips(self, current: str):
+        T = THEME
+        for name, chip in (self.__dict__.get("_chip_by_name") or {}).items():
+            active = name == current
+            want = (chip.condense_color if active else T["bg_card"], T["bg_root"] if active else chip.condense_color)
+            if (chip.cget("bg"), chip.cget("fg")) != want:  # only what changed: no redraw for the rest
+                chip.configure(bg=want[0], fg=want[1])
 
     # ----- detected speakers (SPEAKER_01 …) → the real names, for the whole transcript -----
     def _generic_speakers(self) -> List[str]:

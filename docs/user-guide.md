@@ -155,6 +155,7 @@ uses a linked video if it is on the transcript's own timeline; otherwise it cuts
 | **S** / **M** / **I** | split before the selected word / merge with the next segment / insert a segment |
 | **Delete** (⌫ on the Mac) | delete the open segment (asks first) |
 | **1 – 9** | assign speaker 1–9 |
+| **N** | a note on the segment |
 | ⌘[ ⌘] / Ctrl+[ Ctrl+] | back / forward one step (5–30 s, *Step ▾* or *Player ▸ Step*) |
 | ⇧⌘[ ⇧⌘] / Ctrl+Shift+[ Ctrl+Shift+] | back / forward three steps |
 | ⌘⇧. ⌘⇧, / Ctrl+Shift+. Ctrl+Shift+, | faster / slower |
@@ -215,8 +216,9 @@ Use pseudonyms here, not children's real names: the names end up in every export
 
 ![A note and a cut segment](images/notes-and-cuts.png)
 
-- **✎ Note** (under the segment text): a remark on a segment, such as context or something seen on video. Notes
-  appear in the transcript and as `[Note: …]` in the TXT and paragraph exports.
+- **✎ Note** (press **N** in the transcript, or *⋯ ▸ Note…*): a remark on a segment, such as context or something seen
+  on video. The note line opens under the segment text; it is shown again for segments that have a note, and Esc goes
+  back to the transcript. Notes appear in the transcript and as `[Note: …]` in the TXT and paragraph exports.
 - **Find & replace** (⌘F / Ctrl+F, or *Find*): highlights every match. Return / ⇧Return step through them.
   *Replace* and *Replace all* are each one undo step, with options for case and whole words. Word timings stay.
 
